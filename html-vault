@@ -89,11 +89,11 @@ if __name__ == "__main__":
         sys.exit(1)
     plain = open(sys.argv[1]).read()
     password = getpass.getpass('Password: ')
+    if isinstance(password, bytes):
+        password = password.decode(sys.stdin.encoding)
     if len(password) < 8:
         print("That's not a good password. Use at least 8 characters!")
         sys.exit(1)
-    if isinstance(password, bytes):
-        password = password.decode(sys.stdin.encoding)
     password = password.encode('utf-8')
     print("Encrypting... (this might take a moment)")
     with open(sys.argv[2], 'wb') as out:
