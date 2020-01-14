@@ -6,10 +6,10 @@ Create self-contained HTML pages protecting secret information. Usage:
 html-vault ~/Document/secret.txt protected.html
 ```
 
-Here's an [example HTML file](https://dividuum.de/html-vault-example.html) (password is "thisisanexample")
+**Here's an [example HTML file](https://dividuum.de/html-vault-example.html) (password is "thisisanexample")**
 
 When called, the program requires you to enter a password. It will then
-generate the HTML output file. This make take a moment. Once completed, the
+generate the HTML output file. This may take a moment. Once completed, the
 generated `protected.html` file is is a self-contained HTML file with the
 content of `secret.txt` embedded in a way that it can only be accessed if the
 password is known. You might then place this file on a hidden url
