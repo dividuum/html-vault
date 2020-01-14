@@ -1,0 +1,100 @@
+#!/usr/bin/env python
+#
+# Copyright (c) 2020, Florian Wesch <fw@dividuum.de>
+# 
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+# 
+# 1. Redistributions of source code must retain the above copyright notice, this
+#    list of conditions and the following disclaimer.
+# 2. Redistributions in binary form must reproduce the above copyright notice,
+#    this list of conditions and the following disclaimer in the documentation
+#    and/or other materials provided with the distribution.
+# 
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+# ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+# WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+# DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR
+# ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+# (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+# LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+# ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+# (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+# SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+import hashlib, textwrap, sys, getpass, json, base64
+from Crypto.Cipher import AES
+from Crypto.Random import get_random_bytes
+
+def generate_html(salt, iv, cipher, iterations):
+    return textwrap.dedent(u'''
+        <html><head><meta charset="utf-8"></head><body>
+        <!-- This uses https://github.com/dividuum/html-vault -->
+        <pre id='out' style='border:1px solid gray;'>Need to decrypt to view secret content..</pre>
+        <button onclick='run()'>Decrypt..</button>
+        <script>
+          const page = %s
+          const from_b64 = val => new Uint8Array(atob(val).split('').map(c => c.charCodeAt(0)))
+          async function derive_key(password) {
+            const key = await crypto.subtle.importKey(
+              'raw', new TextEncoder('utf-8').encode(password), 'PBKDF2', false, ['deriveBits']
+            )
+            return await crypto.subtle.deriveBits({
+              name: 'PBKDF2',
+              hash: 'SHA-256',
+              salt: from_b64(page.salt),
+              iterations: page.iterations,
+            }, key, 256)
+          }
+          async function decrypt(password) {
+            const key = await crypto.subtle.importKey(
+              'raw', await derive_key(password), 'AES-CBC', false, ['decrypt']
+            )
+            return new TextDecoder('utf8').decode(await window.crypto.subtle.decrypt({
+              name: 'AES-CBC',
+              iv: from_b64(page.iv),
+            }, key, from_b64(page.cipher)))
+          }
+          async function run() {
+            try {
+              const password = prompt('Password')
+              document.getElementById('out').innerText = 'Decrypting... (this might take a moment)'
+              const plain = await decrypt(password)
+              document.getElementById('out').innerText = plain
+            } catch(e) {
+              document.getElementById('out').innerText = 'Nope'
+            }
+          }
+        </script>
+    ''' % json.dumps(dict(
+        salt = base64.b64encode(salt).decode('utf-8'),
+        iv = base64.b64encode(iv).decode('utf-8'),
+        cipher = base64.b64encode(cipher).decode('utf-8'),
+        iterations = iterations,
+    ), sort_keys=True)).lstrip()
+
+def create_html(plain, password, iterations=20*1000*1000):
+    salt = get_random_bytes(32)
+    dk = hashlib.pbkdf2_hmac('sha256', password, salt, iterations)
+    iv = get_random_bytes(AES.block_size)
+    aes = AES.new(dk, AES.MODE_CBC, iv)
+    def pad(m): # PKCS#7
+        return m+chr(16-len(m)%16)*(16-len(m)%16)
+    cipher = aes.encrypt(pad(plain))
+    return generate_html(salt, iv, cipher, iterations)
+
+if __name__ == "__main__":
+    if len(sys.argv) != 3:
+        print("%s <input-file> <output-html-file>" % sys.argv[0])
+        sys.exit(1)
+    plain = open(sys.argv[1]).read()
+    password = getpass.getpass('Password: ')
+    if len(password) < 8:
+        print("That's not a good password. Use at least 8 characters!")
+        sys.exit(1)
+    if isinstance(password, bytes):
+        password = password.decode(sys.stdin.encoding)
+    password = password.encode('utf-8')
+    print("Encrypting... (this might take a moment)")
+    with open(sys.argv[2], 'wb') as out:
+        out.write(create_html(plain, password).encode('utf-8'))
