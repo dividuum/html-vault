@@ -40,8 +40,16 @@ exfiltrates the entered password. This might be mitigated by inspecting
 the HTML source code prior to entering the password. The generated
 HTML is reasonably small to make this easy.
 
+* It does not authenticate the decrypted content. This would be rather
+useless anyway as that implies that someone was able to modify the
+HTML file in which case you might have bigger problems.
+
 * There have been no reviews yet, but the source code should be (and stay!)
-easy to understand. Feedback is welcome.
+easy to understand.
+
+# Status
+
+Unreviewed - use with caution. Feedback is welcome.
 
 # Requirements
 
