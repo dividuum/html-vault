@@ -22,7 +22,7 @@ encrypted using this derived password.
 # What it can and can't do
 
 * The generated HTML can of course not detect if it was copied. So you
-cannot known if your file is in the hands of an attacker. Placing the
+cannot know if your file is in the hands of an attacker. Placing the
 file on a secret https URL might make this a bit more unlikely but of
 course cannot prevent it.
 
