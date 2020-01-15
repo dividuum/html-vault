@@ -10,7 +10,7 @@ html-vault ~/Document/secret.txt protected.html
 
 When called, the program requires you to enter a password. It will then
 generate the HTML output file. This may take a moment. Once completed, the
-generated `protected.html` file is is a self-contained HTML file with the
+generated `protected.html` file is a self-contained HTML file with the
 content of `secret.txt` embedded in a way that it can only be accessed if the
 password is known. You might then place this file on a hidden url
 for later access.
