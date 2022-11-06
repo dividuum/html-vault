@@ -1,6 +1,6 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 #
-# Copyright (c) 2020, Florian Wesch <fw@dividuum.de>
+# Copyright (c) 2022, Florian Wesch <fw@dividuum.de>
 # 
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
@@ -23,72 +23,69 @@
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import hashlib, textwrap, sys, getpass, json, base64
-from Crypto.Cipher import AES
-from Crypto.Random import get_random_bytes
+from cgi import escape
+from Cryptodome.Cipher import AES
+from Cryptodome.Random import get_random_bytes
 
-def generate_html(salt, iv, cipher, iterations):
+def generate_html(salt, nonce, ciphertext, iterations):
     return textwrap.dedent(u'''
-        <html><head><meta charset="utf-8"></head><body>
+        <!DOCTYPE HTML>
+        <html><head>
+        <meta http-equiv="Content-Security-Policy" content="default-src 'unsafe-inline' 'self'">
+        <meta name="robots" content="noindex"><meta name="referrer" content="no-referrer"><meta charset="utf-8">
+        </head><body>
         <!-- This uses https://github.com/dividuum/html-vault -->
-        <pre id='out' style='border:1px solid gray;'>Need to decrypt to view secret content..</pre>
-        <button onclick='run()'>Decrypt..</button>
-        <script>
-          const page = %s
-          const from_b64 = val => new Uint8Array(atob(val).split('').map(c => c.charCodeAt(0)))
-          async function derive_key(password) {
-            const key = await crypto.subtle.importKey(
-              'raw', new TextEncoder('utf-8').encode(password), 'PBKDF2', false, ['deriveBits']
-            )
-            return await crypto.subtle.deriveBits({
+        <button onclick='run()'>Open vault..</button><script>
+        from_b64 = val => new Uint8Array(atob(val).split('').map(c => c.charCodeAt(0)))
+        decrypt = async password => new TextDecoder('utf8').decode(
+          await window.crypto.subtle.decrypt({
+            name: 'AES-GCM',
+            iv: from_b64(vault.nonce),
+          }, await crypto.subtle.importKey(
+            'raw', await crypto.subtle.deriveBits({
               name: 'PBKDF2',
               hash: 'SHA-256',
-              salt: from_b64(page.salt),
-              iterations: page.iterations,
-            }, key, 256)
+              salt: from_b64(vault.salt),
+              iterations: vault.iterations,
+            }, await crypto.subtle.importKey(
+              'raw', new TextEncoder('utf-8').encode(password), 'PBKDF2', false, ['deriveBits']
+            ), 256), 'AES-GCM', false, ['decrypt']
+          ), from_b64(vault.ciphertext))
+        )
+        run = async () => {
+          try {
+            const password = prompt('Password')
+            const plain = await decrypt(password)
+            delete vault
+            document.open(); document.write(plain); document.close()
+          } catch(e) {
+            console.log(e); alert('Nope')
           }
-          async function decrypt(password) {
-            const key = await crypto.subtle.importKey(
-              'raw', await derive_key(password), 'AES-CBC', false, ['decrypt']
-            )
-            return new TextDecoder('utf8').decode(await window.crypto.subtle.decrypt({
-              name: 'AES-CBC',
-              iv: from_b64(page.iv),
-            }, key, from_b64(page.cipher)))
-          }
-          async function run() {
-            try {
-              const password = prompt('Password')
-              document.getElementById('out').innerText = 'Decrypting... (this might take a moment)'
-              const plain = await decrypt(password)
-              document.getElementById('out').innerText = plain
-            } catch(e) {
-              document.getElementById('out').innerText = 'Nope'
-            }
-          }
+        }
+        vault = %s
         </script>
-    ''' % json.dumps(dict(
+    ''').strip() % json.dumps(dict(
         salt = base64.b64encode(salt).decode('utf-8'),
-        iv = base64.b64encode(iv).decode('utf-8'),
-        cipher = base64.b64encode(cipher).decode('utf-8'),
+        nonce = base64.b64encode(nonce).decode('utf-8'),
+        ciphertext = base64.b64encode(ciphertext).decode('utf-8'),
         iterations = iterations,
-    ), sort_keys=True)).lstrip()
+    ), sort_keys=True, indent=2)
 
-def create_html(plain, password, iterations=20*1000*1000):
+def create_html(plain, password, iterations=5*1000*1000):
     salt = get_random_bytes(32)
     dk = hashlib.pbkdf2_hmac('sha256', password, salt, iterations)
-    iv = get_random_bytes(AES.block_size)
-    aes = AES.new(dk, AES.MODE_CBC, iv)
-    def pad(m): # PKCS#7
-        return m+chr(16-len(m)%16)*(16-len(m)%16)
-    cipher = aes.encrypt(pad(plain))
-    return generate_html(salt, iv, cipher, iterations)
+    cipher = AES.new(dk, AES.MODE_GCM)
+    ciphertext, tag = cipher.encrypt_and_digest(plain.encode('utf-8'))
+    return generate_html(salt, cipher.nonce, ciphertext+tag, iterations)
 
 if __name__ == "__main__":
-    if len(sys.argv) != 3:
-        print("%s <input-file> <output-html-file>" % sys.argv[0])
+    if len(sys.argv) < 3:
+        print("%s <input-file> <output-html-file> [passphrase]" % sys.argv[0])
         sys.exit(1)
     plain = open(sys.argv[1]).read()
-    password = getpass.getpass('Password: ')
+    if plain and plain[0] != '<':
+        plain = '<pre>' + escape(plain) # bit of hack: use <pre> for non-HTML
+    password = len(sys.argv) == 4 and sys.argv[3] or getpass.getpass('Password: ')
     if isinstance(password, bytes):
         password = password.decode(sys.stdin.encoding)
     if len(password) < 8:

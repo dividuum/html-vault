@@ -15,8 +15,13 @@ content of `secret.txt` embedded in a way that it can only be accessed if the
 password is known. You might then place this file on a hidden url
 for later access.
 
-This works by using browser based crypto. A derived password is generated
-using 20 million rounds of PBKDF2. The secret file content is AES-CBC
+If `secret.txt` happens to start with a `<` character, HTML content is
+assumed and the decoded content is directly shown without HTML-escaping
+anything. This can be used to encrypt self-contained HTML apps with
+everything inlined.
+
+Decoding uses browser based crypto. A derived password is generated
+using 5 million rounds of PBKDF2. The secret file content is AES-GCM
 encrypted using this derived password.
 
 # What it can and can't do
@@ -29,7 +34,8 @@ course cannot prevent it.
 * If the browser or OS used to view the HTML file cannot be trusted, the
 encryption is useless as the plain password could be logged by a keylogger
 for later decryption and the password might still be in memory somewhere.
-This also includes rogue browser extensions with full DOM access.
+This also includes rogue browser extensions with full DOM access. Once
+you're done using the decrypted page, close its browser tab.
 
 * If the password it too weak, bruteforcing the content might still be
 viable. PBKDF2 somewhat helps and the large number of rounds was chosen
@@ -39,10 +45,6 @@ to make bruteforcing more difficult.
 exfiltrates the entered password. This might be mitigated by inspecting
 the HTML source code prior to entering the password. The generated
 HTML is reasonably small to make this easy.
-
-* It does not authenticate the decrypted content. This would be rather
-useless anyway as that implies that someone was able to modify the
-HTML file in which case you might have bigger problems.
 
 * There have been no reviews yet, but the source code should be (and stay!)
 easy to understand.
@@ -55,7 +57,7 @@ Unreviewed - use with caution. Feedback is welcome.
 
 * Tested with a recent Chrome/Firefox version. Requires [SubtleCrypto](https://caniuse.com/#search=subtle) API.
 
-* Python2 or Python3 with [pyCrypto](https://www.dlitz.net/software/pycrypto/)
+* Python2 or Python3 with [pycryptodome](https://www.pycryptodome.org/)
 
 # License
 
