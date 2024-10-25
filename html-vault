@@ -35,7 +35,8 @@ def generate_html(salt, nonce, ciphertext, iterations):
         <meta name="robots" content="noindex"><meta name="referrer" content="no-referrer"><meta charset="utf-8">
         </head><body>
         <!-- This uses https://github.com/dividuum/html-vault -->
-        <button onclick='run()'>Open vault..</button><script>
+        Password: <input id="passwordEntry" onkeydown="checkEnter(event)" type="password" />
+        <button id="openVault" onclick='run()'>Open vault..</button><script>
         from_b64 = val => new Uint8Array(atob(val).split('').map(c => c.charCodeAt(0)))
         decrypt = async password => new TextDecoder('utf8').decode(
           await window.crypto.subtle.decrypt({
@@ -52,9 +53,18 @@ def generate_html(salt, nonce, ciphertext, iterations):
             ), 256), 'AES-GCM', false, ['decrypt']
           ), from_b64(vault.ciphertext))
         )
+        function checkEnter({key}) {
+          if (key === "Enter") {
+            run()
+          }
+        }
         run = async () => {
           try {
-            const password = prompt('Password')
+            const passwordEntry = document.getElementById("passwordEntry")
+            const openVault = document.getElementById("openVault")
+            passwordEntry.style.display = "none"
+            openVault.disabled = true
+            const password = passwordEntry.value
             const plain = await decrypt(password)
             delete vault
             document.open(); document.write(plain); document.close()
